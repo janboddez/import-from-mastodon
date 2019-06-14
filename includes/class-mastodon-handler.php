@@ -106,7 +106,7 @@ class Mastodon_Handler {
 			$args = array(
 				'post_title'    => $title,
 				'post_content'  => $content,
-				'post_status'   => apply_filters( 'import_from_mastodon_post_status', 'draft' ),
+				'post_status'   => apply_filters( 'import_from_mastodon_post_status', 'publish' ),
 				'post_type'     => apply_filters( 'import_from_mastodon_post_type', 'post' ),
 				'post_date_gmt' => ( ! empty( $status->created_at ) ? date( 'Y-m-d H:i:s', strtotime( $status->created_at ) ) : '' ),
 			);
@@ -116,6 +116,35 @@ class Mastodon_Handler {
 			if ( is_wp_error( $post_id ) || 0 === $post_id ) {
 				// Skip.
 				continue;
+			}
+
+			if ( ! empty( $status->media_attachments ) ) {
+				$i = 0;
+
+				foreach ( $status->media_attachments as $attachment ) {
+					if ( empty( $attachment->type ) || 'image' !== $attachment->type ) {
+						// For now, only images are supported.
+						continue;
+					}
+
+					if ( empty( $attachment->url ) || ! wp_http_validate_url( $attachment->url ) ) {
+						continue;
+					}
+
+					$attachment_id = $this->create_attachment(
+						$attachment->url,
+						$post_id,
+						( ! empty( $attachment->description ) ? $attachment->description : '' )
+					);
+
+					if ( 0 === $i && 0 !== $attachment_id ) {
+						// Set the first successfully uploaded attachment as
+						// featured image.
+						set_post_thumbnail( $post_id, $attachment_id );
+					}
+
+					$i++;
+				}
 			}
 
 			if ( ! post_type_supports( get_post_type( $post_id ), 'custom-fields' ) ) {
@@ -129,9 +158,54 @@ class Mastodon_Handler {
 
 			if ( ! empty( $status->url ) ) {
 				update_post_meta( $post_id, '_share_on_mastodon_url', esc_url_raw( $status->url ) );
-				do_action( 'import_from_mastodon_after_insert_url', $post_id );
 			}
 		}
+	}
+
+	/**
+	 * Uploads an image to a certain post.
+	 *
+	 * @param  string $attachment_url Image URL.
+	 * @param  int    $post_id        Post ID.
+	 * @param  string $description    Image `alt` text.
+	 * @return int                    Attachment ID, and 0 on failure.
+	 */
+	private function create_attachment( $attachment_url, $post_id, $description ) {
+		// Get the 'current' WordPress upload dir.
+		$wp_upload_dir = wp_upload_dir();
+		$filename      = pathinfo( $attachment_url, PATHINFO_FILENAME ) . '.' . pathinfo( $attachment_url, PATHINFO_EXTENSION );
+
+		// Download attachment.
+		file_put_contents( trailingslashit( $wp_upload_dir['path'] ) . $filename, file_get_contents( $attachment_url ) ); // phpcs:ignore
+
+		// Import the image into WordPress' media library.
+		$attachment    = array(
+			'guid'           => trailingslashit( $wp_upload_dir['url'] ) . $filename,
+			'post_mime_type' => wp_check_filetype( $filename, null )['type'],
+			'post_title'     => $filename,
+			'post_content'   => '',
+			'post_status'    => 'inherit',
+		);
+		$attachment_id = wp_insert_attachment( $attachment, trailingslashit( $wp_upload_dir['path'] ) . $filename, $post_id );
+
+		if ( 0 === $attachment_id ) {
+			// Something went wrong.
+			return 0;
+		}
+
+		if ( ! function_exists( 'wp_crop_image' ) ) {
+			// Load image functions.
+			require ABSPATH . 'wp-admin/includes/image.php';
+		}
+
+		// Generate metadata. Generates thumbnails, too.
+		$metadata = wp_generate_attachment_metadata( $attachment_id, trailingslashit( $wp_upload_dir['path'] ) . $filename );
+		wp_update_attachment_metadata( $attachment_id, $metadata );
+
+		// Explicitly set image `alt` text.
+		update_post_meta( $attachment_id, '_wp_attachment_image_alt', sanitize_text_field( $description ) );
+
+		return $attachment_id;
 	}
 
 	/**
