@@ -1,2 +1,2 @@
 # Import from Mastodon
-Automatically turn Mastodon toots into WordPress posts.
+Automatically turn toots—short messages on [Mastodon](https://joinmastodon.org/)—into WordPress posts.
