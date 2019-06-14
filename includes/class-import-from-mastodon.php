@@ -45,7 +45,7 @@ class Import_From_Mastodon {
 	 */
 	public function activate() {
 		if ( false === wp_next_scheduled( 'import_from_mastodon_get_toots' ) ) {
-			wp_schedule_event( time() + 3600, 'every_15_minutes', 'import_from_mastodon_get_toots' );
+			wp_schedule_event( time() + 900, 'every_15_minutes', 'import_from_mastodon_get_toots' );
 		}
 	}
 

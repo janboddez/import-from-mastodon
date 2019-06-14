@@ -137,7 +137,7 @@ class Mastodon_Handler {
 						( ! empty( $attachment->description ) ? $attachment->description : '' )
 					);
 
-					if ( 0 === $i && 0 !== $attachment_id ) {
+					if ( 0 === $i && 0 !== $attachment_id && apply_filters( 'import_from_mastodon_featured_image', true ) ) {
 						// Set the first successfully uploaded attachment as
 						// featured image.
 						set_post_thumbnail( $post_id, $attachment_id );
