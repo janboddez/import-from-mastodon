@@ -1,6 +1,6 @@
 <?php
 /**
- * Plugin Name: Toots to Posts
+ * Plugin Name: Import from Mastodon
  * Description: Pull toots off Mastodon and into WordPress.
  * Author: Jan Boddez
  * Author URI: https://janboddez.tech/
