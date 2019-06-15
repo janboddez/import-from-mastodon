@@ -17,6 +17,16 @@ add_filter( 'import_from_mastodon_post_status', 'draft' );
    add_filter( 'share_on_mastodon_enabled', '__return_false' );
    ```
 
+   Alternatively, disable all Post Types on Share to Mastodon's settings page.
+
+   To set the—otherwise unrelated—Post Type for imports, use the `import_from_mastodon_post_type` filter. (The default value is 'post'.)
+   ```
+   // Import toots as a Custom Post Type named 'note'.
+   add_filter( 'import_from_mastodon_post_type', function() {
+       return 'note';
+   } );
+   ```
+
 2. Import from _another_—you'll need to manually acquire an access token—Mastodon account, and share on your main account.
 
    ```
