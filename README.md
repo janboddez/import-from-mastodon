@@ -27,7 +27,7 @@ add_filter( 'import_from_mastodon_post_status', 'draft' );
    } );
    ```
 
-2. Import from _another_—you'll need to manually acquire an access token—Mastodon account, and share on your main account.
+2. Import from _another_—you'll need to manually acquire an access token—Mastodon account, and share on your main account. (This'll effectively _relay_ toots from one account to another _whilst leaving regular sharing behavior untouched_.)
 
    ```
    add_filter( 'import_from_mastodon_host', function() {
