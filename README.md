@@ -45,7 +45,9 @@ add_filter( 'import_from_mastodon_post_status', 'draft' );
 
    ```
    // Import toots as a Custom Post Type named 'note'.
-   add_filter( 'import_from_mastodon_post_type', 'note' );
+   add_filter( 'import_from_mastodon_post_type', function() {
+       return 'note';
+   } );
    ```
 
    Whatever you share is set through Share on Mastodon's settings page.
