@@ -25,8 +25,12 @@ This small plugin, which polls your Mastodon account for new toots every 15 minu
        return 'MY_ACCESS_TOKEN';
    } );
 
-   // Don't store originating URL and thus enable resharing on main account.
+   // Don't store originating URL (and thus enable resharing on main account).
    add_filter( 'import_from_mastodon_url, '__return_empty_string' );
+
+   // Actually enable resharing. (Overrides the custom post field otherwise set
+   // from WP Admin.)
+   add_filter( 'share_on_mastodon_enabled', '__return_true' );
    ```
 
    To manually register a new Mastodon app, log into your Mastodon account and head over to your preferences and choose 'Development'. Register a new app with at least the `read:accounts read:statuses write:media write:statuses` scopes—choose any name you like—and generate an access token. The other settings are best left untouched.
