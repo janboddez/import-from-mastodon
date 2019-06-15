@@ -34,3 +34,7 @@ This small plugin, which polls your Mastodon account for new toots every 15 minu
    ```
 
    To manually register a new Mastodon app, log into your Mastodon account and head over to your preferences and choose 'Development'. Register a new app with at least the `read:accounts read:statuses write:media write:statuses` scopes—choose any name you like—and generate an access token. The other settings are best left untouched.
+
+3. Share only, and forget about the import thing.
+
+   Er, simply disable _this_ plugin, and set up Share on Mastodon only.
