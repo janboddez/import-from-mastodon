@@ -4,7 +4,7 @@ Automatically turn toots—short messages on [Mastodon](https://joinmastodon.org
 This small plugin, which polls your Mastodon account for new toots every 15 minutes, relies on [Share on Mastodon's](https://github.com/janboddez/share-on-mastodon) settings, and thus requires it. _Actually_ using them simultaneously, however, _might_ result in duplicate posts—though careful use of the available filter hooks will help preventing this. 
 
 ## Example Use Cases
-1. Disable automatic sharing of WordPress posts, and solely enable the import function. (Both plugins—see above—must still be active!)
+1. Disable automatic sharing of WordPress posts, and solely enable the import function. (Both plugins—see above—must still be active, counterintuitive or not!)
 
    ```
    // Use Share on Mastodon's settings, yet disable sharing itself.
