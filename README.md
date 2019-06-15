@@ -7,7 +7,7 @@ This small plugin, which polls your Mastodon account for new toots every 15 minu
 1. Disable automatic sharing of WordPress posts, and solely enable the import function. (Both plugins—see above—must still be active, counterintuitive or not!)
 
    ```
-   // Use Share on Mastodon's settings, yet disable sharing itself.
+   // Despite using Share on Mastodon's settings, disable sharing itself.
    add_filter( 'share_on_mastodon_enabled', '__return_false' );
    ```
 
