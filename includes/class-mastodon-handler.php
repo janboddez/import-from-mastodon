@@ -186,6 +186,11 @@ class Mastodon_Handler {
 		// Download attachment.
 		file_put_contents( trailingslashit( $wp_upload_dir['path'] ) . $filename, file_get_contents( $attachment_url ) ); // phpcs:ignore
 
+		if ( ! is_file( trailingslashit( $wp_upload_dir['path'] ) . $filename ) ) {
+			// Something went wrong.
+			return 0;
+		}
+
 		// Import the image into WordPress' media library.
 		$attachment    = array(
 			'guid'           => trailingslashit( $wp_upload_dir['url'] ) . $filename,
