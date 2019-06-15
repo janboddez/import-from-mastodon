@@ -77,6 +77,13 @@ class Mastodon_Handler {
 		$statuses = array_reverse( $statuses );
 
 		foreach ( $statuses as $status ) {
+			if ( ! empty( $status->url ) && wp_http_validate_url( $status->url ) ) {
+				if ( null !== $this->get_post( $status->url ) ) {
+					// Already exists.
+					continue;
+				}
+			}
+
 			if ( ! empty( $status->reblog ) || ! empty( $status->reblogged ) ) {
 				// Skip boosts.
 				continue;
@@ -157,7 +164,8 @@ class Mastodon_Handler {
 			}
 
 			if ( ! empty( $status->url ) ) {
-				update_post_meta( $post_id, '_share_on_mastodon_url', esc_url_raw( $status->url ) );
+				$url = apply_filters( 'import_from_mastodon_url', $status->url );
+				update_post_meta( $post_id, '_share_on_mastodon_url', esc_url_raw( $url ) );
 			}
 		}
 	}
@@ -278,24 +286,23 @@ class Mastodon_Handler {
 	}
 
 	/**
-	 * Given a Mastodon status ID, returns the corresponding post ID. No longer
-	 * used.
+	 * Given a Mastodon URL, returns the corresponding post ID.
 	 *
-	 * @param  int $toot_id Toot ID.
-	 * @return int|void     Post ID.
+	 * @param  string $url Toot ID.
+	 * @return int|void    Post ID.
 	 */
-	private function get_post( $toot_id ) {
+	private function get_post( $url ) {
 		// Fetch exactly one post with this Mastodon ID.
 		$query = new \WP_Query(
 			array(
-				'post_type'      => apply_filters( 'import_from_mastodon_post_type', 'post' ),
-				'post_status'    => 'any',
-				'orderby'        => 'ID',
-				'order'          => 'DESC',
-				'limit'          => 1,
-				'meta_key'       => '_import_from_mastodon_id', // phpcs:ignore WordPress.DB.SlowDBQuery
-				'meta_value_num' => (int) $toot_id,
-				'fields'         => 'ids',
+				'post_type'   => apply_filters( 'import_from_mastodon_post_type', 'post' ),
+				'post_status' => 'any',
+				'orderby'     => 'ID',
+				'order'       => 'DESC',
+				'limit'       => 1,
+				'meta_key'    => '_share_on_mastodon_url', // phpcs:ignore WordPress.DB.SlowDBQuery
+				'meta_value'  => esc_url_raw( $url ), // phpcs:ignore WordPress.DB.SlowDBQuery
+				'fields'      => 'ids',
 			)
 		);
 		$posts = $query->posts;
