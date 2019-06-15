@@ -32,7 +32,7 @@ add_filter( 'import_from_mastodon_post_status', 'draft' );
    } );
 
    // Don't store originating URL (and thus enable resharing on main account).
-   add_filter( 'import_from_mastodon_url, '__return_empty_string' );
+   add_filter( 'import_from_mastodon_url', '__return_empty_string' );
 
    // Force automatic resharing. (Overrides the custom post field otherwise set
    // from WP Admin.)
