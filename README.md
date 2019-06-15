@@ -38,7 +38,7 @@ add_filter( 'import_from_mastodon_post_status', 'draft' );
 
    To manually register a new Mastodon app, log into your Mastodon account and head over to your preferences and choose 'Development'. Register a new app with at least the `read:accounts read:statuses write:media write:statuses` scopes—choose any name you like—and generate an access token. The other settings are best left untouched.
 
-3. Share one Post Type, and convert toots into another.
+3. Share one Post Type, and (optionally) convert toots into another.
 
    ```
    // Import toots as a Custom Post Type named 'note'.
