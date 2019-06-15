@@ -125,6 +125,24 @@ class Mastodon_Handler {
 				continue;
 			}
 
+			if ( post_type_supports( get_post_type( $post_id ), 'custom-fields' ) ) {
+				if ( ! empty( $status->id ) ) {
+					update_post_meta( $post_id, '_import_from_mastodon_id', (int) $status->id );
+				}
+
+				if ( ! empty( $status->url ) ) {
+					update_post_meta(
+						$post_id,
+						'_share_on_mastodon_url',
+						esc_url_raw( apply_filters( 'import_from_mastodon_url', $status->url ) )
+					);
+				}
+			}
+
+			// Force `transition_post_status` actions to run.
+			$post = get_post( $post_id );
+			wp_transition_post_status( $post->post_status, $post->post_status, $post );
+
 			if ( ! empty( $status->media_attachments ) ) {
 				$i = 0;
 
@@ -152,20 +170,6 @@ class Mastodon_Handler {
 
 					$i++;
 				}
-			}
-
-			if ( ! post_type_supports( get_post_type( $post_id ), 'custom-fields' ) ) {
-				// We're done here.
-				continue;
-			}
-
-			if ( ! empty( $status->id ) ) {
-				update_post_meta( $post_id, '_import_from_mastodon_id', (int) $status->id );
-			}
-
-			if ( ! empty( $status->url ) ) {
-				$url = apply_filters( 'import_from_mastodon_url', $status->url );
-				update_post_meta( $post_id, '_share_on_mastodon_url', esc_url_raw( $url ) );
 			}
 		}
 	}
