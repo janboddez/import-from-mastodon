@@ -32,7 +32,7 @@ add_filter( 'import_from_mastodon_post_status', 'draft' );
    } );
 
    // Don't store originating URL (and thus enable resharing on main account).
-   add_filter( 'import_from_mastodon_url, '__return_empty_string' );
+   add_filter( 'import_from_mastodon_url', '__return_empty_string' );
 
    // Force automatic resharing. (Overrides the custom post field otherwise set
    // from WP Admin.)
@@ -45,7 +45,9 @@ add_filter( 'import_from_mastodon_post_status', 'draft' );
 
    ```
    // Import toots as a Custom Post Type named 'note'.
-   add_filter( 'import_from_mastodon_post_type', 'note' );
+   add_filter( 'import_from_mastodon_post_type', function() {
+       return 'note';
+   } );
    ```
 
    Whatever you share is set through Share on Mastodon's settings page.
