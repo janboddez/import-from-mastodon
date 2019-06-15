@@ -1,7 +1,7 @@
 # Import from Mastodon
 Automatically turn toots—short messages on [Mastodon](https://joinmastodon.org/)—into WordPress posts.
 
-This small plugin, which polls your Mastodon account for new toots every 15 minutes, relies on [Share on Mastodon's](https://github.com/janboddez/share-on-mastodon) settings, and thus requires it. _Actually_ using them simultaneously, however, _might_ result in duplicate posts—though careful use of the available filter hooks will help preventing this. 
+This small plugin, which polls your Mastodon account for new toots every 15 minutes, relies on [Share on Mastodon's](https://github.com/janboddez/share-on-mastodon) settings, and thus requires it. 
 
 ## Post Statuses
 The default value of 'publish' can be easily overridden.
