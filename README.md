@@ -31,9 +31,6 @@ add_filter( 'import_from_mastodon_post_status', 'draft' );
        return 'MY_ACCESS_TOKEN';
    } );
 
-   // Don't store originating URL (and thus enable resharing on main account).
-   add_filter( 'import_from_mastodon_url', '__return_empty_string' );
-
    // Force automatic resharing. (Overrides the custom post field otherwise set
    // from WP Admin.)
    add_filter( 'share_on_mastodon_enabled', '__return_true' );
