@@ -127,7 +127,8 @@ class Mastodon_Handler {
 
 			if ( post_type_supports( get_post_type( $post_id ), 'custom-fields' ) ) {
 				if ( ! empty( $status->id ) ) {
-					update_post_meta( $post_id, '_import_from_mastodon_id', (int) $status->id );
+					// See also https://docs.joinmastodon.org/entities/status#id.
+					update_post_meta( $post_id, '_import_from_mastodon_id', $status->id );
 				}
 			}
 
