@@ -23,7 +23,7 @@ add_filter( 'import_from_mastodon_limit', function( $limit ) {
 ```
 
 ### Of Note
-Only the _most recent_ toots are taken into account. (We use a `since_id` API param to tell Mastodon which toots to look up for us. This `since_id` corresponds with the most recently imported _existing_, i.e., in WordPress, post.)
+The very first time this plugin does its thing, up to 40 (see the remark above, too) toots are imported. From then on, only the _most recent_ toots are taken into account. (We use a `since_id` API param to tell Mastodon which toots to look up for us. This `since_id` corresponds with the most recently imported _existing_, i.e., in WordPress, post.)
 
 If all that sounds confusing, it is. Well, maybe not. Regardless, it's okay to just forget about it.
 
