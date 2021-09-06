@@ -23,11 +23,9 @@ The very first time this plugin does its thing, up to 40 (per the remark above) 
 If all that sounds confusing, it is. Well, maybe not. Regardless, it's okay to just forget about it.
 
 ## Boosts and Replies, and Custom Formatting
-It's possible to either exlude or include boosts or replies. Note that these might lack some context, like the URL of the toot being replied to, etc.
+It's possible to either exclude or include boosts or replies. Just, uh, know that boosts and replies might look a bit _off_, as in lack some context, like the URL of the toot being replied to, etc.
 
-Just, uh, know that boosts and replies might look a bit _off_.
-
-Nevertheless, it _is possible_ to modify the way imported statuses, including boosts and replies, are formatted, through filter hooks:
+That said, it _is possible_ to modify the way imported statuses, including boosts and replies, are formatted, through filter hooks:
 ```
 add_filter( 'import_from_mastodon_post_content', function( $content, $status ) {
   // Note that `$status` contains the entire status object (not associated
@@ -40,7 +38,7 @@ add_filter( 'import_from_mastodon_post_title', function( $content, $status ) {
   return $content;
 } );
 ```
-With these, developers should be able to do just about whatever.
+With these, developers should be able to do just about whatever. Like use, e.g., `$status->in_reply_to_id` to determine the URL of the toot being replied to, download and parse it, and display it above the default content. (Definitely add-on plugin territory!)
 
 ## Tags and Blocklist
 **Tags**: (Optional) Poll for toots with any of these tags only (and ignore all other toots). Separate tags by commas.  
