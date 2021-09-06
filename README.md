@@ -42,7 +42,7 @@ With these, developers should be able to do just about whatever. Like use, e.g.,
 
 ## Tags and Blocklist
 **Tags**: (Optional) Poll for toots with any of these tags only (and ignore all other toots). Separate tags by commas.  
-**Blocklist**: (Optional) Ignore toots with any of these words. (One word, or part of a word, per line.) Note: Beware partial matches.
+**Blocklist**: (Optional) Ignore toots with any of these words. (One word, or part of a word, per line.) Beware partial matches!
 
 ## Images
 Images are downloaded and [attached](https://wordpress.org/support/article/using-image-and-file-attachments/#attachment-to-a-post) to imported toots, but **not** (yet) automatically included _in_ the post.
