@@ -10,6 +10,8 @@ After activating the plugin, visit Settings > Import From Mastodon. Fill out you
 
 Now, on the same settings page, click the Authorize Access button. This should take you to your Mastodon instance and allow you to authorize WordPress to read from your timeline. (We don't request write access.) You'll be automatically redirected to WordPress afterward.
 
+**Note**: WordPress won't immediately start importing toots, but will take a couple minutes before doing so. I'll "fix" this in a next version.
+
 ## How It Works
 Every 15 minutes—more or less, because WordPress's cron system isn't quite exact—your Mastodon timeline is polled for new toots, which are then imported as the post type of your choice.
 
