@@ -11,7 +11,7 @@ After activating the plugin, visit Settings > Import From Mastodon. Fill out you
 Now, on the same settings page, click the Authorize Access button. This should take you to your Mastodon instance and allow you to authorize WordPress to read from your timeline. (We don't request write access.) You'll be automatically redirected to WordPress afterward.
 
 ## How It Works
-Every 15 minutes—more or less, because WordPress's cron system isn't quite exact—your timeline is polled for new toots, which are then imported as the post type of your choice.
+Every 15 minutes—more or less, because WordPress's cron system isn't quite exact—your Mastodon timeline is polled for new toots, which are then imported as the post type of your choice.
 
 By default, only the 40 most recent toots are considered. If somehow you think you might very well create more than 40 toots in 15 minutes, this can be overridden:
 ```
