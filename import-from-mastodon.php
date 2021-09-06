@@ -1,13 +1,13 @@
 <?php
 /**
  * Plugin Name: Import from Mastodon
- * Description: Pull toots off Mastodon and into WordPress.
- * Author: Jan Boddez
- * Author URI: https://janboddez.tech/
- * License: GNU General Public License v3
+ * Description: Import Mastodon statuses into WordPress.
+ * Author:      Jan Boddez
+ * Author URI:  https://jan.boddez.net/
+ * License:     GNU General Public License v3
  * License URI: http://www.gnu.org/licenses/gpl-3.0.html
  * Text Domain: import-from-mastodon
- * Version: 0.1
+ * Version:     0.2.0
  *
  * @package Import_From_Mastodon
  */
@@ -19,7 +19,9 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-require_once dirname( __FILE__ ) . '/includes/class-mastodon-handler.php';
 require_once dirname( __FILE__ ) . '/includes/class-import-from-mastodon.php';
+require_once dirname( __FILE__ ) . '/includes/class-import-handler.php';
+require_once dirname( __FILE__ ) . '/includes/class-options-handler.php';
 
-new Import_From_Mastodon();
+$import_from_mastodon = Import_From_Mastodon::get_instance();
+$import_from_mastodon->register();
