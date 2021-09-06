@@ -317,7 +317,7 @@ class Import_Handler {
 			return null;
 		}
 
-		if ( empty( $this->options['mastodon_client_id'] ) ) {
+		if ( empty( $this->options['mastodon_host'] ) ) {
 			return null;
 		}
 
