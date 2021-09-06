@@ -15,12 +15,7 @@ Now, on the same settings page, click the Authorize Access button. This should t
 ## How It Works
 Every 15 minutes—more or less, because WordPress's cron system isn't quite exact—your Mastodon timeline is polled for new toots, which are then imported as the post type of your choice.
 
-By default, only the 40 most recent toots are considered. If somehow you think you might very well create more than 40 toots in 15 minutes, this can be overridden:
-```
-add_filter( 'import_from_mastodon_limit', function( $limit ) {
-  return 80; // Or whatever
-} );
-```
+By default, only the 40 most recent toots are considered. (This is also the maximum value the Mastodon API will allow. Unless you create more than 40 toots per 15 minutes, this shouldn't be an issue, either.)
 
 ### Of Note
 The very first time this plugin does its thing, up to 40 (see the remark above, too) toots are imported. From then on, only the _most recent_ toots are taken into account. (We use a `since_id` API param to tell Mastodon which toots to look up for us. This `since_id` corresponds with the most recently imported _existing_, i.e., in WordPress, post.)
