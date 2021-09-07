@@ -40,6 +40,9 @@ add_filter( 'import_from_mastodon_post_title', function( $content, $status ) {
 ```
 With these, developers should be able to do just about whatever. Like use, e.g., `$status->in_reply_to_id` to determine the URL of the toot being replied to, download and parse it, and display it above the default content. (Definitely add-on plugin territory!)
 
+### Threading
+There isn't any. Replies-to-self, when replies are enabled, are imported as separate, new posts, not comments. (Again, this would make a nice add-on plugin.)
+
 ## Tags and Blocklist
 **Tags**: (Optional) Poll for toots with any of these tags only (and ignore all other toots). Separate tags by commas.  
 **Blocklist**: (Optional) Ignore toots with any of these words. (One word, or part of a word, per line.) Beware partial matches!
