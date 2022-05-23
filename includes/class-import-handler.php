@@ -183,7 +183,7 @@ class Import_Handler {
 				'post_title'    => $title,
 				'post_content'  => $content,
 				'post_status'   => isset( $this->options['post_status'] ) ? $this->options['post_status'] : 'publish',
-				'post_type'     => isset( $this->options['post_type'] ) ? $this->options['post_type'] : 'post',
+				'post_type'     => isset( $this->options['post_type'] ) ? $this->options['post_type'] : 'post', // There used to be a `post_type` setting.
 				'post_date_gmt' => ! empty( $status->created_at ) ? date( 'Y-m-d H:i:s', strtotime( $status->created_at ) ) : '', // phpcs:ignore WordPress.DateTime.RestrictedFunctions.date_date
 				'meta_input'    => array(),
 			);
@@ -196,9 +196,7 @@ class Import_Handler {
 				$args['post_category'] = array( $this->options['post_category'] );
 			}
 
-			$args['meta_input']['_import_from_mastodon_id'] = $status->id;
-
-			// (Original) URL.
+			$args['meta_input']['_import_from_mastodon_id']  = $status->id;
 			$args['meta_input']['_import_from_mastodon_url'] = esc_url_raw( $url );
 
 			if ( empty( $title ) && ! empty( $args['meta_input']['_import_from_mastodon_url'] ) ) {
@@ -212,6 +210,7 @@ class Import_Handler {
 				continue;
 			}
 
+			// We use this hook to save the most recently imported toot's ID.
 			do_action( 'import_from_mastodon_after_import', $post_id, $status );
 
 			if ( ! empty( $status->media_attachments ) ) {
@@ -224,6 +223,7 @@ class Import_Handler {
 					}
 
 					if ( empty( $attachment->url ) || ! wp_http_validate_url( $attachment->url ) ) {
+						// Invalid URL.
 						continue;
 					}
 
@@ -243,6 +243,8 @@ class Import_Handler {
 
 					$i++;
 				}
+
+				do_action( 'import_from_mastodon_after_attachments', $post_id, $status );
 			}
 		}
 	}
@@ -256,57 +258,83 @@ class Import_Handler {
 	 * @return int                    Attachment ID, and 0 on failure.
 	 */
 	private function create_attachment( $attachment_url, $post_id, $description ) {
-		// Get the 'current' WordPress upload dir.
-		$wp_upload_dir = wp_upload_dir();
-		$filename      = pathinfo( $attachment_url, PATHINFO_FILENAME ) . '.' . pathinfo( $attachment_url, PATHINFO_EXTENSION );
-
-		// Download attachment.
-		$response = wp_remote_get(
-			esc_url_raw( $attachment_url ),
-			array(
-				'timeout' => 11,
-			)
-		);
-
-		if ( is_wp_error( $response ) ) {
-			return 0;
-		}
-
-		if ( empty( $response['body'] ) ) {
-			return 0;
-		}
-
-		global $wp_filesystem;
-
-		if ( empty( $wp_filesystem ) ) {
-			require_once ABSPATH . 'wp-admin/includes/file.php';
-			WP_Filesystem();
-		}
-
-		// Write image data.
-		if ( ! $wp_filesystem->put_contents( trailingslashit( $wp_upload_dir['path'] ) . $filename, $response['body'], 0644 ) ) {
-			return 0;
-		}
-
-		// Import the image into WordPress' media library.
-		$attachment = array(
-			'guid'           => trailingslashit( $wp_upload_dir['url'] ) . $filename,
-			'post_mime_type' => wp_check_filetype( $filename, null )['type'],
-			'post_title'     => $filename,
-			'post_content'   => '',
-			'post_status'    => 'inherit',
-		);
-
-		$attachment_id = wp_insert_attachment( $attachment, trailingslashit( $wp_upload_dir['path'] ) . $filename, $post_id );
-
-		if ( 0 === $attachment_id ) {
-			// Something went wrong.
-			return 0;
-		}
-
 		if ( ! function_exists( 'wp_crop_image' ) ) {
 			// Load image functions.
 			require_once ABSPATH . 'wp-admin/includes/image.php';
+		}
+
+		// Get the "current" WordPress upload dir.
+		$wp_upload_dir = wp_upload_dir();
+
+		// *Assuming* unique filenames, here.
+		$filename  = pathinfo( $attachment_url, PATHINFO_FILENAME ) . '.' . pathinfo( $attachment_url, PATHINFO_EXTENSION );
+		$file_path = trailingslashit( $wp_upload_dir['path'] ) . $filename;
+
+		if ( file_exists( $file_path ) ) {
+			error_log( '[Import From Mastodon] File already exists: ' . esc_url_raw( $attachment_url ) ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
+
+			// File already exists, somehow. So either we've got a different
+			// file with the exact same name or we're trying to re-import the
+			// exact same file. Assuming the latter, also because Mastodon's
+			// random file names aren't something we would easily come up with.
+
+			/* @todo: Create our own filenames based on complete URL hashes? */
+			$file_url      = str_replace( $wp_upload_dir['basedir'], $wp_upload_dir['baseurl'], $file_path );
+			$attachment_id = attachment_url_to_postid( $file_url ); // Attachment ID or 0.
+		} else {
+			// Download attachment.
+			$response = wp_remote_get(
+				esc_url_raw( $attachment_url ),
+				array(
+					'headers' => array( 'Accept' => 'image/*' ),
+					'timeout' => 11,
+				)
+			);
+
+			if ( is_wp_error( $response ) ) {
+				return 0;
+			}
+
+			if ( empty( $response['body'] ) ) {
+				return 0;
+			}
+
+			global $wp_filesystem;
+
+			if ( empty( $wp_filesystem ) ) {
+				require_once ABSPATH . 'wp-admin/includes/file.php';
+				WP_Filesystem();
+			}
+
+			// Write image data.
+			if ( ! $wp_filesystem->put_contents( $file_path, $response['body'], 0644 ) ) {
+				error_log( '[Import From Mastodon] Could not save image file: ' . $file_path ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
+				return 0;
+			}
+
+			if ( ! file_is_valid_image( $file_path ) || ! file_is_displayable_image( $file_path ) ) {
+				unset( $file_path );
+
+				error_log( '[Import From Mastodon] Invalid image file: ' . esc_url_raw( $attachment_url ) ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
+				return 0;
+			}
+
+			// Import the image into WordPress' media library.
+			$attachment = array(
+				'guid'           => $file_path,
+				'post_mime_type' => wp_check_filetype( $filename, null )['type'],
+				'post_title'     => $filename,
+				'post_content'   => '',
+				'post_status'    => 'inherit',
+			);
+
+			$attachment_id = wp_insert_attachment( $attachment, trailingslashit( $wp_upload_dir['path'] ) . $filename, $post_id );
+		}
+
+		if ( empty( $attachment_id ) ) {
+			// Something went wrong.
+			error_log( '[Import From Mastodon] Invalid image file: ' . esc_url_raw( $attachment_url ) ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
+			return 0;
 		}
 
 		// Generate metadata. Generates thumbnails, too.
@@ -349,18 +377,23 @@ class Import_Handler {
 		);
 
 		if ( is_wp_error( $response ) ) {
-			// An error occurred.
-			/* @todo: Log a proper error message. */
-			error_log( print_r( $response, true ) ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions
+			error_log( '[Import From Mastodon] Could not get account ID: ' . $response->get_error_message() ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
 			return null;
+		}
+
+		if ( in_array( wp_remote_retrieve_response_code( $response ), array( 401, 403 ), true ) ) {
+			error_log( '[Import From Mastodon] Invalid token?' ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
+
+			// The current access token has somehow become invalid. Forget it.
+			unset( $this->options['mastodon_access_token'] );
+			update_option( 'import_from_mastodon_settings', $this->options );
 		}
 
 		$body    = wp_remote_retrieve_body( $response );
 		$account = json_decode( $body );
 
-		/* @todo: Report/process invalid tokens. */
-
 		if ( empty( $account->id ) ) {
+			error_log( '[Import From Mastodon] Despite the seemingly valid response, could not get account ID' ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
 			return null;
 		}
 

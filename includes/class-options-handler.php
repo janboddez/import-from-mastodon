@@ -47,7 +47,7 @@ class Options_Handler {
 	 *
 	 * @var array Plugin settings.
 	 */
-	public $options;
+	private $options = array();
 
 	/**
 	 * Constructor.
@@ -67,7 +67,6 @@ class Options_Handler {
 		add_action( 'admin_enqueue_scripts', array( $this, 'enqueue_scripts' ) );
 		add_action( 'admin_post_import_from_mastodon', array( $this, 'admin_post' ) );
 
-		add_action( 'import_from_mastodon_verify_token', array( $this, 'cron_verify_token' ) );
 		add_action( 'import_from_mastodon_after_import', array( $this, 'set_latest_toot' ), 10, 2 );
 	}
 
@@ -288,21 +287,15 @@ class Options_Handler {
 
 				if ( ! empty( $this->options['mastodon_client_id'] ) && ! empty( $this->options['mastodon_client_secret'] ) ) {
 					// An app was successfully registered.
-					if ( ! empty( $_GET['code'] ) && empty( $this->options['mastodon_access_token'] ) ) {
+					if ( ! empty( $_GET['code'] ) && empty( $this->options['mastodon_access_token'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended
 						// Access token request.
-						if ( $this->request_access_token( wp_unslash( $_GET['code'] ) ) ) { // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
+						if ( $this->request_access_token( wp_unslash( $_GET['code'] ) ) ) { // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized,WordPress.Security.NonceVerification.Recommended
 							?>
 							<div class="notice notice-success is-dismissible">
 								<p><?php esc_html_e( 'Access granted!', 'import-from-mastodon' ); ?></p>
 							</div>
 							<?php
 						}
-					}
-
-					if ( isset( $_GET['action'] ) && 'revoke' === $_GET['action'] && isset( $_GET['_wpnonce'] ) && wp_verify_nonce( sanitize_key( $_GET['_wpnonce'] ), 'import-from-mastodon-reset' ) ) {
-						// Revoke access. Forget access token regardless of the
-						// outcome.
-						$this->revoke_access();
 					}
 
 					if ( empty( $this->options['mastodon_access_token'] ) ) {
@@ -336,11 +329,11 @@ class Options_Handler {
 								esc_url(
 									add_query_arg(
 										array(
-											'page'     => 'import-from-mastodon',
-											'action'   => 'revoke',
-											'_wpnonce' => wp_create_nonce( 'import-from-mastodon-reset' ),
+											'action'   => 'import_from_mastodon',
+											'revoke'   => 'true',
+											'_wpnonce' => wp_create_nonce( 'import-from-mastodon-revoke' ),
 										),
-										admin_url( 'options-general.php' )
+										admin_url( 'admin-post.php' )
 									)
 								),
 								esc_html__( 'Revoke Access', 'import-from-mastodon' )
@@ -442,7 +435,7 @@ class Options_Handler {
 		);
 
 		if ( is_wp_error( $response ) ) {
-			error_log( print_r( $response, true ) ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions
+			error_log( '[Import From Mastodon] Could not register app: ' . $response->get_error_message() ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
 			return;
 		}
 
@@ -454,7 +447,8 @@ class Options_Handler {
 			$this->options['mastodon_client_secret'] = $app->client_secret;
 			update_option( 'import_from_mastodon_settings', $this->options );
 		} else {
-			error_log( print_r( $response, true ) ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions
+			// Log the entire response, for now.
+			error_log( print_r( $response, true ) ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log,WordPress.PHP.DevelopmentFunctions.error_log_print_r
 		}
 	}
 
@@ -484,7 +478,7 @@ class Options_Handler {
 		);
 
 		if ( is_wp_error( $response ) ) {
-			error_log( print_r( $response, true ) ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions
+			error_log( '[Import From Mastodon] Access token request failed: ' . $response->get_error_message() ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
 			return false;
 		}
 
@@ -498,7 +492,8 @@ class Options_Handler {
 
 			return true;
 		} else {
-			error_log( print_r( $response, true ) ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions
+			// Log the entire response, for now.
+			error_log( print_r( $response, true ) ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log,WordPress.PHP.DevelopmentFunctions.error_log_print_r
 		}
 
 		return false;
@@ -530,6 +525,7 @@ class Options_Handler {
 		$response = wp_remote_post(
 			esc_url_raw( $this->options['mastodon_host'] . '/oauth/revoke' ),
 			array(
+				'headers' => array( 'Content-Type' => 'application/x-www-form-urlencoded' ),
 				'body'    => array(
 					'client_id'     => $this->options['mastodon_client_id'],
 					'client_secret' => $this->options['mastodon_client_secret'],
@@ -539,25 +535,22 @@ class Options_Handler {
 			)
 		);
 
-		// Delete access token, regardless of the outcome.
-		$this->options['mastodon_access_token'] = '';
-
-		update_option( 'import_from_mastodon_settings', $this->options );
-
 		if ( is_wp_error( $response ) ) {
-			error_log( print_r( $response, true ) ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions
+			error_log( '[Import From Mastodon] Revoking access token failed: ' . $response->get_error_message() ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
 			return false;
 		}
 
-		if ( 200 === wp_remote_retrieve_response_code( $response ) ) {
-			// If we were actually successful.
-			return true;
-		} else {
-			error_log( print_r( $response, true ) ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions
+		if ( 200 !== wp_remote_retrieve_response_code( $response ) ) {
+			// Log the entire response, for now.
+			error_log( print_r( $response, true ) ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log,WordPress.PHP.DevelopmentFunctions.error_log_print_r
+			return false;
 		}
 
-		// Something went wrong.
-		return false;
+		unset( $this->options['mastodon_access_token'] );
+		update_option( 'import_from_mastodon_settings', $this->options );
+
+		error_log( '[Import From Mastodon] Access token revoked!' ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
+		return true;
 	}
 
 	/**
@@ -577,7 +570,15 @@ class Options_Handler {
 	 * `admin-post.php` callback.
 	 */
 	public function admin_post() {
-		if ( isset( $_GET['reset'] ) && 'true' === $_GET['reset'] && isset( $_GET['_wpnonce'] ) && wp_verify_nonce( sanitize_key( $_GET['_wpnonce'] ), 'import-from-mastodon-reset' ) ) {
+		if ( isset( $_GET['revoke'] ) && 'true' === $_GET['revoke']
+		  && isset( $_GET['_wpnonce'] ) && wp_verify_nonce( sanitize_key( $_GET['_wpnonce'] ), 'import-from-mastodon-revoke' ) ) {
+			// Revoke access. Forget access token regardless of the
+			// outcome.
+			$this->revoke_access();
+		}
+
+		if ( isset( $_GET['reset'] ) && 'true' === $_GET['reset']
+		  && isset( $_GET['_wpnonce'] ) && wp_verify_nonce( sanitize_key( $_GET['_wpnonce'] ), 'import-from-mastodon-reset' ) ) {
 			// Reset all of this plugin's settings.
 			$this->reset_options();
 		}
@@ -593,44 +594,6 @@ class Options_Handler {
 			)
 		);
 		exit;
-	}
-
-	/**
-	 * Verifies Import From Mastodon's token status.
-	 *
-	 * Normally runs once a day.
-	 */
-	public function cron_verify_token() {
-		if ( empty( $this->options['mastodon_host'] ) ) {
-			return;
-		}
-
-		if ( empty( $this->options['mastodon_access_token'] ) ) {
-			return;
-		}
-
-		// Verify the current access token.
-		$response = wp_remote_get(
-			esc_url_raw( $this->options['mastodon_host'] . '/api/v1/accounts/verify_credentials' ),
-			array(
-				'headers' => array(
-					'Authorization' => 'Bearer ' . $this->options['mastodon_access_token'],
-					'Accept'        => 'application/json',
-				),
-				'timeout' => 11,
-			)
-		);
-
-		if ( is_wp_error( $response ) ) {
-			error_log( print_r( $response, true ) ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions
-			return;
-		}
-
-		if ( in_array( wp_remote_retrieve_response_code( $response ), array( 401, 403 ), true ) ) {
-			// The current access token has somehow become invalid. Forget it.
-			unset( $this->options['mastodon_access_token'] );
-			update_option( 'import_from_mastodon_settings', $this->options );
-		}
 	}
 
 	/**
