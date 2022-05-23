@@ -46,6 +46,13 @@ class Import_Handler {
 			return;
 		}
 
+		$account_id = $this->get_account_id();
+
+		if ( null === $account_id ) {
+			error_log( '[Import From Mastodon] Could not get account ID; token invalid?' ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
+			return;
+		}
+
 		$args = array(
 			'exclude_reblogs' => empty( $this->options['include_reblogs'] ),
 			'exclude_replies' => empty( $this->options['include_replies'] ),
@@ -75,13 +82,6 @@ class Import_Handler {
 			$headers['Authorization'] = 'Bearer ' . $this->options['mastodon_access_token'];
 		}
 
-		$account_id = $this->get_account_id();
-
-		if ( null === $account_id ) {
-			error_log( '[Import From Mastodon] Could not get account ID; token invalid?' ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
-			return;
-		}
-
 		$response = wp_remote_get(
 			esc_url_raw( $this->options['mastodon_host'] . '/api/v1/accounts/' . $account_id . '/statuses?' . $query_string ),
 			array(
@@ -92,7 +92,7 @@ class Import_Handler {
 
 		if ( is_wp_error( $response ) ) {
 			// An error occurred.
-			error_log( '[Import From Mastodon] Failed to get toots: ' . $response->get_message() ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
+			error_log( '[Import From Mastodon] Failed to get toots: ' . $response->get_error_message() ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
 			return;
 		}
 
@@ -122,6 +122,24 @@ class Import_Handler {
 
 			if ( ! empty( $denylist ) && isset( $status->content ) && str_ireplace( $denylist, '', $status->content ) !== $status->content ) {
 				// Denylisted.
+				continue;
+			}
+
+			// ID (on our instance).
+			if ( empty( $status->id ) ) {
+				// This should never happen.
+				continue;
+			}
+
+			if ( ! empty( $status->reblog->url ) ) {
+				$url = $status->reblog->url;
+			} else {
+				$url = $status->url;
+			}
+
+			if ( self::already_exists( $url ) ) {
+				// Use URL rather than ID, to avoid clashes after switching
+				// instances, etc.
 				continue;
 			}
 
@@ -178,20 +196,10 @@ class Import_Handler {
 				$args['post_category'] = array( $this->options['post_category'] );
 			}
 
-			// ID (on our instance).
-			if ( empty( $status->id ) ) {
-				// This should never happen.
-				continue;
-			}
-
 			$args['meta_input']['_import_from_mastodon_id'] = $status->id;
 
 			// (Original) URL.
-			if ( ! empty( $status->reblog->url ) ) {
-				$args['meta_input']['_import_from_mastodon_url'] = esc_url_raw( $status->reblog->url );
-			} elseif ( ! empty( $status->url ) ) {
-				$args['meta_input']['_import_from_mastodon_url'] = esc_url_raw( $status->url );
-			}
+			$args['meta_input']['_import_from_mastodon_url'] = esc_url_raw( $url );
 
 			if ( empty( $title ) && ! empty( $args['meta_input']['_import_from_mastodon_url'] ) ) {
 				$args['post_title'] = $args['meta_input']['_import_from_mastodon_url'];
@@ -360,6 +368,51 @@ class Import_Handler {
 	}
 
 	/**
+	 * Checks for the existence of a similar post.
+	 *
+	 * We normally try to avoid double posts by including a `since_id API param,
+	 * but that one gets reset when switching instances.
+	 *
+	 * @param  string $toot_url Toot URL, because IDs aren't unique per se.
+	 * @return int|bool         The corresponding post ID, or false.
+	 */
+	public static function already_exists( $toot_url ) {
+		// Fetch the most recent toot's post ID.
+		$query = new \WP_Query(
+			array(
+				'post_type'   => 'any',
+				'post_status' => 'any',
+				'fields'      => 'ids',
+				'limit'       => 1,
+				'meta_query'  => array( // phpcs:ignore WordPress.DB.SlowDBQuery
+					'relation' => 'AND',
+					array(
+						'key'     => '_import_from_mastodon_url',
+						'compare' => 'EXISTS',
+					),
+					array(
+						'key'     => '_import_from_mastodon_url',
+						'compare' => '=',
+						'value'   => esc_url_raw( $toot_url ),
+					),
+				),
+			)
+		);
+
+		$posts = $query->posts;
+
+		if ( empty( $posts ) ) {
+			return false;
+		}
+
+		if ( ! is_array( $posts ) ) {
+			return false;
+		}
+
+		return reset( $posts );
+	}
+
+	/**
 	 * Returns the most recent toot's Mastodon ID.
 	 *
 	 * @return string|null Mastodon ID, or `null`.
@@ -370,7 +423,10 @@ class Import_Handler {
 			array(
 				'post_type'   => 'any',
 				'post_status' => 'any',
-				'orderby'     => 'ID',
+				// Ordering by ID would not necessarily give us the most recent
+				// status, like, in the case of re-imports, etc.
+				'meta_key'    => '_import_from_mastodon_id', // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_key
+				'orderby'     => 'meta_value_num', // Assume a numerical ID.
 				'order'       => 'DESC',
 				'fields'      => 'ids',
 				'limit'       => 1,
