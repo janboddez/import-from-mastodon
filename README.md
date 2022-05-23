@@ -55,3 +55,17 @@ add_filter( 'import_from_mastodon_featured_image', '__return_false' ); // Do not
 
 ## Miscellaneous
 There are in fact a few more filters and settings that I might eventually document a bit better (though the settings should kind of speak for themselves).
+
+### Custom Post Types
+Like, if you wanted your imported toots be a Custom Post Type (rather than the default `post`):
+```
+add_filter( 'import_from_mastodon_args', function( $args, $status ) {
+	$args['post_type'] = 'iwcpt_note'; // My "Note" type.
+
+	unset( $args['post_category'] ); // Because my CPT may not support the "category" taxonomy at all.
+
+	return $args;
+}, 10, 2 );
+
+```
+Above `$args` are in fact the very arguments passed on to [`wp_insert_post()`](https://developer.wordpress.org/reference/functions/wp_insert_post/#parameters). (Endless possibilities!)
