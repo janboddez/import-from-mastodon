@@ -241,6 +241,7 @@ class Options_Handler {
 									'id'               => 'import_from_mastodon_settings[post_category]',
 									'name'             => 'import_from_mastodon_settings[post_category]',
 									'selected'         => term_exists( $this->options['post_category'], 'category' ) ? $this->options['post_category'] : -1,
+									'hide_empty'       => 0,
 								)
 							);
 							?>
