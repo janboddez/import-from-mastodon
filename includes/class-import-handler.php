@@ -160,7 +160,7 @@ class Import_Handler {
 				// Add a little bit of context to boosts.
 				if ( ! empty( $content ) ) {
 					$content  = '<blockquote>' . $content . PHP_EOL . PHP_EOL;
-					$content .= '&mdash;<a href="' . $status->reblog->url . '" rel="nofollow">' . $status->reblog->account->username . '</a>';
+					$content .= '&mdash;<a href="' . esc_url( $status->reblog->url ) . '" rel="nofollow">' . $status->reblog->account->username . '</a>';
 					$content .= '</blockquote>';
 				}
 
