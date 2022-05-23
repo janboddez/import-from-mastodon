@@ -19,29 +19,15 @@ class Options_Handler {
 		'mastodon_client_id'     => '',
 		'mastodon_client_secret' => '',
 		'mastodon_access_token'  => '',
-		'post_type'              => 'post',
 		'post_status'            => 'publish',
 		'post_format'            => '',
 		'include_replies'        => false,
-		'include_reblogs'        => false,
+		'include_replies'        => false,
 		'tags'                   => '',
 		'denylist'               => '',
-	);
-
-	/**
-	 * (Some of) the post types users shouldn't be able to select.
-	 */
-	const DEFAULT_POST_TYPES = array(
-		'page',
-		'attachment',
-		'revision',
-		'nav_menu_item',
-		'custom_css',
-		'customize_changeset',
-		'user_request',
-		'oembed_cache',
-		'wp_block',
-		'coblocks_pattern', // Not actually WP core.
+		'post_author'            => 0,
+		'post_category'          => 0,
+		'public_only'            => true,
 	);
 
 	/**
@@ -55,6 +41,13 @@ class Options_Handler {
 		'pending',
 		'private',
 	);
+
+	/**
+	 * This plugins settings.
+	 *
+	 * @var array Plugin settings.
+	 */
+	public $options;
 
 	/**
 	 * Constructor.
@@ -75,6 +68,7 @@ class Options_Handler {
 		add_action( 'admin_post_import_from_mastodon', array( $this, 'admin_post' ) );
 
 		add_action( 'import_from_mastodon_verify_token', array( $this, 'cron_verify_token' ) );
+		add_action( 'import_from_mastodon_after_import', array( $this, 'set_latest_toot' ), 10, 2 );
 	}
 
 	/**
@@ -130,6 +124,9 @@ class Options_Handler {
 						// outcome.
 						$this->revoke_access();
 
+						// Forget latest toot ID.
+						$this->forget_latest_toot();
+
 						// Then, save the new URL.
 						$this->options['mastodon_host'] = untrailingslashit( $mastodon_host );
 
@@ -149,25 +146,22 @@ class Options_Handler {
 			}
 		}
 
-		if ( isset( $settings['post_type'] ) ) {
-			// Post types considered valid.
-			$supported_post_types = array_diff(
-				get_post_types(),
-				self::DEFAULT_POST_TYPES
-			);
-
-			if ( in_array( wp_unslash( $settings['post_type'] ), $supported_post_types, true ) ) {
-				$this->options['post_type'] = wp_unslash( $settings['post_type'] );
-			}
+		if ( isset( $settings['post_status'] ) && in_array( $settings['post_status'], self::POST_STATUSES, true ) ) {
+			$this->options['post_status'] = $settings['post_status'];
 		}
 
-		if ( isset( $settings['post_status'] ) && in_array( wp_unslash( $settings['post_status'] ), self::POST_STATUSES, true ) ) {
-			$this->options['post_status'] = wp_unslash( $settings['post_status'] ); // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
+		if ( isset( $settings['post_category'] ) && term_exists( (int) $settings['post_category'], 'category' ) ) {
+			$this->options['post_category'] = (int) $settings['post_category'];
+		}
+
+		if ( isset( $settings['post_author'] ) && false !== get_userdata( (int) $settings['post_author'] ) ) {
+			$this->options['post_author'] = (int) $settings['post_author'];
 		}
 
 		// These can be either `"1"` or `true`.
 		$this->options['include_reblogs'] = ! empty( $settings['include_reblogs'] );
 		$this->options['include_replies'] = ! empty( $settings['include_replies'] );
+		$this->options['public_only']     = ! empty( $settings['public_only'] );
 
 		// Sanitizing text(area) fields is tricky, especially when data needs to
 		// be kept intact. Anyhow, let's see how this works out.
@@ -199,12 +193,6 @@ class Options_Handler {
 				<?php
 				// Print nonces and such.
 				settings_fields( 'import-from-mastodon-settings-group' );
-
-				// Post types considered valid.
-				$supported_post_types = array_diff(
-					get_post_types(),
-					self::DEFAULT_POST_TYPES
-				);
 				?>
 				<table class="form-table">
 					<tr valign="top">
@@ -213,24 +201,10 @@ class Options_Handler {
 						<p class="description"><?php esc_html_e( 'Your Mastodon instance&rsquo;s URL.', 'import-from-mastodon' ); ?></p></td>
 					</tr>
 					<tr valign="top">
-						<th scope="row"><?php esc_html_e( 'Post Type', 'import-from-mastodon' ); ?></th>
-						<td><ul style="list-style: none; margin-top: 4px;">
-							<?php
-							foreach ( $supported_post_types as $post_type ) :
-								$post_type = get_post_type_object( $post_type );
-								?>
-								<li><label><input type="radio" name="import_from_mastodon_settings[post_type]" value="<?php echo esc_attr( $post_type->name ); ?>" <?php checked( $post_type->name, $this->options['post_type'] ); ?>> <?php echo esc_html( $post_type->labels->singular_name ); ?></label></li>
-								<?php
-							endforeach;
-							?>
-						</ul>
-						<p class="description"><?php esc_html_e( 'Post type for newly imported statuses.', 'import-from-mastodon' ); ?></p></td>
-					</tr>
 						<th scope="row"><?php esc_html_e( 'Post Status', 'import-from-mastodon' ); ?></th>
 						<td><ul style="list-style: none; margin-top: 4px;">
 							<?php
 							foreach ( self::POST_STATUSES as $post_status ) :
-								$post_type = get_post_type_object( $post_type );
 								?>
 								<li><label><input type="radio" name="import_from_mastodon_settings[post_status]" value="<?php echo esc_attr( $post_status ); ?>" <?php checked( $post_status, $this->options['post_status'] ); ?>> <?php echo esc_html( ucfirst( $post_status ) ); ?></label></li>
 								<?php
@@ -238,6 +212,45 @@ class Options_Handler {
 							?>
 						</ul>
 						<p class="description"><?php esc_html_e( 'Post status for newly imported statuses.', 'import-from-mastodon' ); ?></p></td>
+					</tr>
+					<tr valign="top">
+						<th scope="row"><label for="import_from_mastodon_settings[post_author]"><?php esc_html_e( 'Post Author', 'import-from-pixelfed' ); ?></label></th>
+						<td>
+							<?php
+							$user = isset( $this->options['post_author'] ) ? get_userdata( $this->options['post_author'] ) : null;
+
+							wp_dropdown_users(
+								array(
+									'show_option_none' => esc_attr__( 'Select author', 'import-from-pixelfed' ),
+									'id'               => 'import_from_mastodon_settings[post_author]',
+									'name'             => 'import_from_mastodon_settings[post_author]',
+									'selected'         => ! empty( $user->ID ) ? $user->ID : -1, // phpcs:ignore WordPress.CodeAnalysis.AssignmentInCondition.FoundInTernaryCondition,Squiz.PHP.DisallowMultipleAssignments.Found
+								)
+							);
+							?>
+							<p class="description"><?php esc_html_e( 'The author for newly imported statuses.', 'import-from-pixelfed' ); ?></p>
+						</td>
+					</tr>
+					<tr valign="top">
+						<th scope="row"><label for="import_from_mastodon_settings[post_category]"><?php esc_html_e( 'Default Category', 'import-from-pixelfed' ); ?></label></th>
+						<td>
+							<?php
+							wp_dropdown_categories(
+								array(
+									'show_option_none' => esc_attr__( 'Select category', 'import-from-pixelfed' ),
+									'id'               => 'import_from_mastodon_settings[post_category]',
+									'name'             => 'import_from_mastodon_settings[post_category]',
+									'selected'         => term_exists( $this->options['post_category'], 'category' ) ? $this->options['post_category'] : -1,
+								)
+							);
+							?>
+							<p class="description"><?php esc_html_e( 'Default category for newly imported toots.', 'import-from-pixelfed' ); ?></p>
+						</td>
+					</tr>
+					<tr valign="top">
+						<th scope="row"><?php esc_html_e( 'Public Only', 'import-from-mastodon' ); ?></th>
+						<td><label><input type="checkbox" id="import_from_mastodon_settings[public_only]" name="import_from_mastodon_settings[public_only]" value="1" <?php checked( ! empty( $this->options['public_only'] ) ); ?>/> <?php esc_html_e( 'Public only?' ); ?></label>
+						<p class="description"><?php esc_html_e( 'Import public toots only?', 'import-from-mastodon' ); ?></p></td>
 					</tr>
 					<tr valign="top">
 						<th scope="row"><?php esc_html_e( 'Boosts', 'import-from-mastodon' ); ?></th>
@@ -601,6 +614,7 @@ class Options_Handler {
 			array(
 				'headers' => array(
 					'Authorization' => 'Bearer ' . $this->options['mastodon_access_token'],
+					'Accept'        => 'application/json',
 				),
 				'timeout' => 11,
 			)
@@ -613,9 +627,29 @@ class Options_Handler {
 
 		if ( in_array( wp_remote_retrieve_response_code( $response ), array( 401, 403 ), true ) ) {
 			// The current access token has somehow become invalid. Forget it.
-			$this->options['mastodon_access_token'] = '';
+			unset( $this->options['mastodon_access_token'] );
 			update_option( 'import_from_mastodon_settings', $this->options );
 		}
+	}
+
+	/**
+	 * Updates the most recently imported toot ID.
+	 *
+	 * @param int    $post_id ID of the most recently created post.
+	 * @param stdObj $status  Corresponding Mastodon status.
+	 */
+	public function set_latest_toot( $post_id, $status ) {
+		// Add (or update) latest toot ID.
+		$this->options['latest_toot'] = $status->id;
+		update_option( 'import_from_mastodon_settings', $this->options, false );
+	}
+
+	/**
+	 * Forgets the most recently imported toot ID.
+	 */
+	public function forget_latest_toot() {
+		unset( $this->options['latest_toot'] );
+		update_option( 'import_from_mastodon_settings', $this->options, false );
 	}
 
 	/**

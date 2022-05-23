@@ -52,10 +52,8 @@ class Import_Handler {
 			'limit'           => apply_filters( 'import_from_mastodon_limit', 40 ),
 		);
 
-		$most_recent_toot = $this->get_latest_status();
-
-		if ( $most_recent_toot ) {
-			$args['since_id'] = $most_recent_toot;
+		if ( isset( $this->options['latest_toot'] ) ) {
+			$args['since_id'] = $this->options['latest_toot'];
 		}
 
 		$query_string = http_build_query( $args );
@@ -68,26 +66,41 @@ class Import_Handler {
 			}
 		}
 
+		$headers = array(
+			'Accept' => 'application/json',
+		);
+
+		if ( empty( $this->options['public_only'] ) ) {
+			// Importing non-public toots requires an auth token.
+			$headers['Authorization'] = 'Bearer ' . $this->options['mastodon_access_token'];
+		}
+
+		$account_id = $this->get_account_id();
+
+		if ( null === $account_id ) {
+			error_log( '[Import From Mastodon] Could not get account ID; token invalid?' ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
+			return;
+		}
+
 		$response = wp_remote_get(
-			esc_url_raw( $this->options['mastodon_host'] . '/api/v1/accounts/' . $this->get_account_id() . '/statuses?' . $query_string ),
+			esc_url_raw( $this->options['mastodon_host'] . '/api/v1/accounts/' . $account_id . '/statuses?' . $query_string ),
 			array(
-				'headers' => array(
-					'Authorization' => 'Bearer ' . $this->options['mastodon_access_token'],
-				),
+				'headers' => $headers,
 				'timeout' => 11,
 			)
 		);
 
 		if ( is_wp_error( $response ) ) {
 			// An error occurred.
-			error_log( print_r( $response, true ) ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions
+			error_log( '[Import From Mastodon] Failed to get toots: ' . $response->get_message() ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
 			return;
 		}
 
 		$body     = wp_remote_retrieve_body( $response );
-		$statuses = @json_decode( $body );
+		$statuses = json_decode( $body );
 
 		if ( empty( $statuses ) || ! is_array( $statuses ) ) {
+			error_log( '[Import From Mastodon] No new toots found.' ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions
 			return;
 		}
 
@@ -101,8 +114,11 @@ class Import_Handler {
 		$statuses = array_reverse( $statuses );
 
 		foreach ( $statuses as $status ) {
-			$content = '';
-			$title   = '';
+			if ( isset( $status->visibility ) && 'direct' === $status->visibility ) {
+				// Direct message. Skip. Followers-only and unlisted toots _can_
+				// be imported, depending on the "public only" setting.
+				continue;
+			}
 
 			if ( ! empty( $denylist ) && isset( $status->content ) && str_ireplace( $denylist, '', $status->content ) !== $status->content ) {
 				// Denylisted.
@@ -145,29 +161,30 @@ class Import_Handler {
 			$content = apply_filters( 'import_from_mastodon_post_content', $content, $status );
 			$title   = apply_filters( 'import_from_mastodon_post_title', $title, $status );
 
-			$post_type = apply_filters(
-				'import_from_mastodon_post_type',
-				isset( $this->options['post_type'] ) ? $this->options['post_type'] : 'post',
-				$status
-			);
-
 			$args = array(
 				'post_title'    => $title,
 				'post_content'  => $content,
-				'post_status'   => apply_filters(
-					'import_from_mastodon_post_status',
-					isset( $this->options['post_status'] ) ? $this->options['post_status'] : 'publish',
-					$status
-				),
-				'post_type'     => $post_type,
+				'post_status'   => isset( $this->options['post_status'] ) ? $this->options['post_status'] : 'publish',
+				'post_type'     => isset( $this->options['post_type'] ) ? $this->options['post_type'] : 'post',
 				'post_date_gmt' => ! empty( $status->created_at ) ? date( 'Y-m-d H:i:s', strtotime( $status->created_at ) ) : '', // phpcs:ignore WordPress.DateTime.RestrictedFunctions.date_date
 				'meta_input'    => array(),
 			);
 
-			// ID (on our instance).
-			if ( ! empty( $status->id ) ) {
-				$args['meta_input']['_import_from_mastodon_id'] = $status->id;
+			if ( ! empty( $this->options['post_author'] ) && false !== get_userdata( $this->options['post_author'] ) ) {
+				$args['post_author'] = $this->options['post_author'];
 			}
+
+			if ( ! empty( $this->options['post_category'] ) && term_exists( $this->options['post_category'], 'category' ) ) {
+				$args['post_category'] = array( $this->options['post_category'] );
+			}
+
+			// ID (on our instance).
+			if ( empty( $status->id ) ) {
+				// This should never happen.
+				continue;
+			}
+
+			$args['meta_input']['_import_from_mastodon_id'] = $status->id;
 
 			// (Original) URL.
 			if ( ! empty( $status->reblog->url ) ) {
@@ -187,16 +204,7 @@ class Import_Handler {
 				continue;
 			}
 
-			if ( post_type_supports( $post_type, 'post-formats' ) ) {
-				set_post_format(
-					$post_id,
-					apply_filters(
-						'import_from_mastodon_post_format',
-						! empty( $this->options['post_format'] ) ? $this->options['post_format'] : 'standard',
-						$status
-					)
-				);
-			}
+			do_action( 'import_from_mastodon_after_import', $post_id, $status );
 
 			if ( ! empty( $status->media_attachments ) ) {
 				$i = 0;
@@ -310,7 +318,7 @@ class Import_Handler {
 	/**
 	 * Get the authenticated user's account ID.
 	 *
-	 * @return int|null Account ID.
+	 * @return int|null Account ID, or null on failure.
 	 */
 	private function get_account_id() {
 		if ( empty( $this->options['mastodon_access_token'] ) ) {
@@ -326,6 +334,7 @@ class Import_Handler {
 			array(
 				'headers' => array(
 					'Authorization' => 'Bearer ' . $this->options['mastodon_access_token'],
+					'Accept'        => 'application/json',
 				),
 				'timeout' => 11,
 			)
@@ -333,16 +342,21 @@ class Import_Handler {
 
 		if ( is_wp_error( $response ) ) {
 			// An error occurred.
+			/* @todo: Log a proper error message. */
 			error_log( print_r( $response, true ) ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions
 			return null;
 		}
 
 		$body    = wp_remote_retrieve_body( $response );
-		$account = @json_decode( $body );
+		$account = json_decode( $body );
 
-		if ( ! empty( $account->id ) ) {
-			return (int) $account->id;
+		/* @todo: Report/process invalid tokens. */
+
+		if ( empty( $account->id ) ) {
+			return null;
 		}
+
+		return (int) $account->id;
 	}
 
 	/**
