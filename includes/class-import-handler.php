@@ -157,12 +157,27 @@ class Import_Handler {
 			);
 
 			if ( isset( $status->reblog->url ) && isset( $status->reblog->account->username ) ) {
+				$content = trim(
+					wp_kses(
+						isset( $status->reblog->content ) ? $status->reblog->content : '',
+						array(
+							'a'  => array(
+								'href' => array(),
+							),
+							'br' => array(),
+							'p'  => array(),
+						)
+					)
+				);
+
 				// Add a little bit of context to boosts.
 				if ( ! empty( $content ) ) {
-					$content  = '<div class="h-cite u-repost-of">' . PHP_EOL . '<blockquote class="e-content">' . $content . PHP_EOL . PHP_EOL;
-					$content .= '&mdash;<a class="u-url" href="' . esc_url( $status->reblog->url ) . '" rel="nofollow">' . esc_html( $status->reblog->account->username ) . '</a>';
-					$content .= '</blockquote>' . PHP_EOL . '</div>';
+					$content  = '<div class="h-cite u-repost-of"><blockquote>' . PHP_EOL . '<div class="e-content">' . $content . '</div>' . PHP_EOL;
+					$content .= '&mdash;<a class="u-url" href="' . esc_url( $status->reblog->url ) . '" rel="nofollow">@' . esc_html( $status->reblog->account->username ) . '</a>';
+					$content .= PHP_EOL . '</blockquote></div>';
 				}
+
+				/* @todo: Also include reblogs' attachments. */
 			} elseif ( isset( $status->in_reply_to_id ) ) {
 				// We could eventually add some kind of threading, but let's
 				// stick with a tiny bit of context for now.
