@@ -56,11 +56,12 @@ class Import_Handler {
 		$args = array(
 			'exclude_reblogs' => empty( $this->options['include_reblogs'] ),
 			'exclude_replies' => empty( $this->options['include_replies'] ),
-			'limit'           => apply_filters( 'import_from_mastodon_limit', 40 ),
+			'limit'           => 1, // Initially, import only one status.
 		);
 
 		if ( isset( $this->options['latest_toot'] ) ) {
 			$args['since_id'] = $this->options['latest_toot'];
+			$args['limit']    = apply_filters( 'import_from_mastodon_limit', 40 ); // Lowering this number might prevent timeouts but could lead to skipped toots.
 		}
 
 		$query_string = http_build_query( $args );
@@ -198,7 +199,7 @@ class Import_Handler {
 
 					if ( isset( $parent->url ) && isset( $parent->account->username ) ) {
 						/* translators: %s: reply link */
-						$content = sprintf( esc_html__( 'In reply to %s.', 'import-from-mastodon' ), '<a class="u-in-reply-to" href="' . esc_url( $parent->url ) . '" rel="nofollow">' . esc_html( $parent->account->username ) . '</a>' ) . PHP_EOL . PHP_EOL . $content;
+						$content = sprintf( esc_html__( 'In reply to %s.', 'import-from-mastodon' ), '<a class="u-in-reply-to" href="' . esc_url( $parent->url ) . '" rel="nofollow">@' . esc_html( $parent->account->username ) . '</a>' ) . PHP_EOL . PHP_EOL . $content;
 						$content = trim( $content ); // Trim off trailing whitespace, in case `$content` was originally empty.
 					}
 				}
