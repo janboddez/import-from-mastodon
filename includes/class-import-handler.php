@@ -358,7 +358,7 @@ class Import_Handler {
 			}
 
 			if ( ! file_is_valid_image( $file_path ) || ! file_is_displayable_image( $file_path ) ) {
-				unset( $file_path );
+				unlink( $file_path );
 
 				error_log( '[Import From Mastodon] Invalid image file: ' . esc_url_raw( $attachment_url ) ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
 				return 0;
